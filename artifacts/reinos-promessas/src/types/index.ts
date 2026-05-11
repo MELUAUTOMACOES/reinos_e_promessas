@@ -27,9 +27,12 @@ export type TurnPhase =
 export type ActionType =
   | "INICIAR_PARTIDA"
   | "AVANCAR_FASE"
+  | "RECRUTAR"
   | "MOVER_TROPAS"
+  | "FORTALECER_FE"
   | "ATACAR"
   | "JOGAR_CARTA"
+  | "DESCARTAR_CARTA"
   | "ENCERRAR_TURNO"
   | "SALVAR_PARTIDA"
   | "RESETAR_PARTIDA";

@@ -5,6 +5,10 @@ export { createNewGame } from "./setup";
 // ── Turn ─────────────────────────────────────────────────────────────────────
 export { startTurn, endTurn, advancePhase, recordAction, getNextPlayerId } from "./turn";
 
+// ── Actions ──────────────────────────────────────────────────────────────────
+export { recruitTroops, moveTroops, strengthenFaith, discardCard } from "./actions";
+export type { ActionResult } from "./actions";
+
 // ── Resources ────────────────────────────────────────────────────────────────
 export {
   getTroopLimit,

@@ -1,18 +1,20 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { GameState, NewGameConfig, TerritoryId, PlayerId } from "@/types";
+import type { GameState, NewGameConfig, TerritoryId, PlayerId, CardId } from "@/types";
 import {
   createNewGame,
   startTurn,
   endTurn,
   advancePhase,
-  recordAction,
   checkVictory,
   resolveCombat,
   canAttack,
-  canMove,
   faithOnConquest,
+  recruitTroops,
+  moveTroops,
+  strengthenFaith,
+  discardCard,
 } from "@/game-core";
 
 const STORAGE_KEY = "reinos-promessas-save";
@@ -22,29 +24,35 @@ const STORAGE_KEY = "reinos-promessas-save";
 interface GameStore {
   game: GameState | null;
 
-  /** Start a new game from a full NewGameConfig */
   startGame: (config: NewGameConfig) => void;
-
-  /** Wipe the current save */
   resetGame: () => void;
-
-  /** Advance to the next turn phase (applies endTurn if at fim_turno) */
   nextPhase: () => void;
-
-  /** Immediately end the current player's turn */
   finishTurn: () => void;
-
-  /** Attack from one territory to another */
-  attack: (from: TerritoryId, to: TerritoryId, tropas: number) => void;
-
-  /** Move troops between friendly territories */
-  moveArmies: (from: TerritoryId, to: TerritoryId, count: number) => void;
-
-  /** Persist the current state to localStorage */
   saveGame: () => void;
-
-  /** Returns true if there is an in-progress game */
   hasSavedGame: () => boolean;
+
+  // ── Player actions ──────────────────────────────────────────────────────
+  recruitTroopsAction: (territoryId: TerritoryId) => { valid: boolean; reason?: string };
+  moveTroopsAction: (fromId: TerritoryId, toId: TerritoryId, count: number) => { valid: boolean; reason?: string };
+  strengthenFaithAction: (territoryId: TerritoryId, option: "safe" | "quiz", quizCorrect?: boolean) => { valid: boolean; reason?: string };
+  discardCardAction: (cardId: CardId) => { valid: boolean; reason?: string };
+
+  // ── Combat (future) ─────────────────────────────────────────────────────
+  attack: (from: TerritoryId, to: TerritoryId, tropas: number) => void;
+}
+
+// ─── Victory helper ───────────────────────────────────────────────────────────
+
+function applyVictoryCheck(state: GameState): GameState {
+  const check = checkVictory(state);
+  if (check.hasWinner) {
+    return {
+      ...state,
+      vencedor: check.winnerId,
+      log: [...state.log, check.reason ?? ""],
+    };
+  }
+  return state;
 }
 
 // ─── Store ────────────────────────────────────────────────────────────────────
@@ -54,56 +62,74 @@ export const useGameStore = create<GameStore>()(
     (set, get) => ({
       game: null,
 
-      // ── startGame ─────────────────────────────────────────────────────────
       startGame: (config) => {
         const fresh = createNewGame(config);
-        // Apply first player's production immediately (producao phase)
-        const withProduction = startTurn(fresh);
-        set({ game: withProduction });
+        set({ game: startTurn(fresh) });
       },
 
-      // ── resetGame ─────────────────────────────────────────────────────────
       resetGame: () => set({ game: null }),
 
-      // ── nextPhase ─────────────────────────────────────────────────────────
       nextPhase: () => {
         const { game } = get();
         if (!game || game.vencedor) return;
-
-        const next = advancePhase(game);
-        const victoryCheck = checkVictory(next);
-
-        set({
-          game: victoryCheck.hasWinner
-            ? {
-                ...next,
-                vencedor: victoryCheck.winnerId,
-                log: [...next.log, victoryCheck.reason ?? ""],
-              }
-            : next,
-        });
+        set({ game: applyVictoryCheck(advancePhase(game)) });
       },
 
-      // ── finishTurn ────────────────────────────────────────────────────────
       finishTurn: () => {
         const { game } = get();
         if (!game || game.vencedor) return;
-
-        const next = endTurn(game);
-        const victoryCheck = checkVictory(next);
-
-        set({
-          game: victoryCheck.hasWinner
-            ? {
-                ...next,
-                vencedor: victoryCheck.winnerId,
-                log: [...next.log, victoryCheck.reason ?? ""],
-              }
-            : next,
-        });
+        set({ game: applyVictoryCheck(endTurn(game)) });
       },
 
-      // ── attack ────────────────────────────────────────────────────────────
+      saveGame: () => {
+        set((s) => ({
+          game: s.game ? { ...s.game, savedAt: new Date().toISOString() } : null,
+        }));
+      },
+
+      hasSavedGame: () => get().game !== null,
+
+      // ── recruitTroopsAction ─────────────────────────────────────────────
+      recruitTroopsAction: (territoryId) => {
+        const { game } = get();
+        if (!game || game.vencedor) return { valid: false, reason: "Partida encerrada." };
+
+        const result = recruitTroops(game, game.turno.jogadorAtualId, territoryId);
+        if (result.valid) set({ game: applyVictoryCheck(result.state) });
+        return { valid: result.valid, reason: result.reason };
+      },
+
+      // ── moveTroopsAction ────────────────────────────────────────────────
+      moveTroopsAction: (fromId, toId, count) => {
+        const { game } = get();
+        if (!game || game.vencedor) return { valid: false, reason: "Partida encerrada." };
+
+        const result = moveTroops(game, game.turno.jogadorAtualId, fromId, toId, count);
+        if (result.valid) set({ game: applyVictoryCheck(result.state) });
+        return { valid: result.valid, reason: result.reason };
+      },
+
+      // ── strengthenFaithAction ───────────────────────────────────────────
+      strengthenFaithAction: (territoryId, option, quizCorrect) => {
+        const { game } = get();
+        if (!game || game.vencedor) return { valid: false, reason: "Partida encerrada." };
+
+        const result = strengthenFaith(game, game.turno.jogadorAtualId, territoryId, option, quizCorrect);
+        if (result.valid) set({ game: applyVictoryCheck(result.state) });
+        return { valid: result.valid, reason: result.reason };
+      },
+
+      // ── discardCardAction ───────────────────────────────────────────────
+      discardCardAction: (cardId) => {
+        const { game } = get();
+        if (!game || game.vencedor) return { valid: false, reason: "Partida encerrada." };
+
+        const result = discardCard(game, game.turno.jogadorAtualId, cardId);
+        if (result.valid) set({ game: applyVictoryCheck(result.state) });
+        return { valid: result.valid, reason: result.reason };
+      },
+
+      // ── attack (future: combat phase) ───────────────────────────────────
       attack: (fromId, toId, tropas) => {
         const { game } = get();
         if (!game || game.vencedor) return;
@@ -114,20 +140,13 @@ export const useGameStore = create<GameStore>()(
 
         const { valid, reason } = canAttack(fromT, toT, game.turno.jogadorAtualId);
         if (!valid) {
-          set({
-            game: {
-              ...game,
-              log: [...game.log, `Ataque inválido: ${reason}`],
-            },
-          });
+          set({ game: { ...game, log: [...game.log, `Ataque inválido: ${reason}`] } });
           return;
         }
 
         const result = resolveCombat(tropas, toT);
         const territories = game.territories.map((t) => {
-          if (t.id === fromId) {
-            return { ...t, tropasAtuais: Math.max(1, t.tropasAtuais - result.atacantePerdas) };
-          }
+          if (t.id === fromId) return { ...t, tropasAtuais: Math.max(1, t.tropasAtuais - result.atacantePerdas) };
           if (t.id === toId) {
             if (result.atacanteVenceu) {
               return faithOnConquest(
@@ -142,96 +161,24 @@ export const useGameStore = create<GameStore>()(
 
         const attacker = game.players.find((p) => p.id === game.turno.jogadorAtualId);
         const logEntry = result.atacanteVenceu
-          ? `${attacker?.name} conquistou ${toT.name}! (${tropas - result.atacantePerdas} tropas restantes)`
+          ? `${attacker?.name} conquistou ${toT.name}!`
           : `Ataque de ${attacker?.name} em ${toT.name} foi repelido.`;
 
-        let next = recordAction(
-          { ...game, territories, log: [...game.log, logEntry] },
-          "ATACAR",
-          logEntry
-        );
-        next = { ...next, turno: { ...next.turno, atacouNesteturno: true } };
-
-        const victoryCheck = checkVictory(next);
         set({
-          game: victoryCheck.hasWinner
-            ? {
-                ...next,
-                vencedor: victoryCheck.winnerId,
-                log: [...next.log, victoryCheck.reason ?? ""],
-              }
-            : next,
-        });
-      },
-
-      // ── moveArmies ────────────────────────────────────────────────────────
-      moveArmies: (fromId, toId, count) => {
-        const { game } = get();
-        if (!game || game.vencedor) return;
-
-        const fromT = game.territories.find((t) => t.id === fromId);
-        const toT = game.territories.find((t) => t.id === toId);
-        if (!fromT || !toT) return;
-
-        const { valid, reason } = canMove(fromT, toT, game.turno.jogadorAtualId, count);
-        if (!valid) {
-          set({
-            game: {
-              ...game,
-              log: [...game.log, `Movimento inválido: ${reason}`],
-            },
-          });
-          return;
-        }
-
-        const territories = game.territories.map((t) => {
-          if (t.id === fromId) return { ...t, tropasAtuais: t.tropasAtuais - count };
-          if (t.id === toId) return { ...t, tropasAtuais: t.tropasAtuais + count };
-          return t;
-        });
-
-        const logEntry = `${game.players.find((p) => p.id === game.turno.jogadorAtualId)?.name} moveu ${count} tropa(s) de ${fromT.name} para ${toT.name}.`;
-
-        const next = recordAction(
-          {
+          game: applyVictoryCheck({
             ...game,
             territories,
-            turno: {
-              ...game.turno,
-              territoriosMovidosNesteturno: [
-                ...game.turno.territoriosMovidosNesteturno,
-                fromId,
-              ],
-            },
+            turno: { ...game.turno, atacouNesteturno: true },
             log: [...game.log, logEntry],
-          },
-          "MOVER_TROPAS",
-          logEntry
-        );
-
-        set({ game: next });
+          }),
+        });
       },
-
-      // ── saveGame ──────────────────────────────────────────────────────────
-      saveGame: () => {
-        set((state) => ({
-          game: state.game
-            ? { ...state.game, savedAt: new Date().toISOString() }
-            : null,
-        }));
-      },
-
-      // ── hasSavedGame ──────────────────────────────────────────────────────
-      hasSavedGame: () => get().game !== null,
     }),
     {
       name: STORAGE_KEY,
       version: 3,
-      partialize: (state) => ({ game: state.game }),
-      migrate: (_persistedState, version) => {
-        if (version < 3) return { game: null };
-        return _persistedState as { game: GameState | null };
-      },
+      partialize: (s) => ({ game: s.game }),
+      migrate: (_s, version) => (version < 3 ? { game: null } : (_s as { game: GameState | null })),
     }
   )
 );
