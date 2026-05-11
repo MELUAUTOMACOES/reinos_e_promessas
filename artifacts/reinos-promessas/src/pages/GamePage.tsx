@@ -1,5 +1,5 @@
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useGameStore } from "@/store/gameStore";
 import { GAME_MODES, TROOP_LIMITS } from "@/types";
@@ -85,6 +85,7 @@ export default function GamePage() {
     moveTroopsAction,
     strengthenFaithAction,
     discardCardAction,
+    executeBotAction,
   } = useGameStore();
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -92,6 +93,21 @@ export default function GamePage() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   if (!game) { setLocation("/"); return null; }
+
+  // Auto-executar ações do bot
+  useEffect(() => {
+    if (!game || game.vencedor) return;
+    const cp = game.players.find(p => p.id === game.turno.jogadorAtualId);
+    if (!cp || !cp.isBot) return;
+    if (game.turno.acoesRestantes <= 0) return;
+
+    const timer = setTimeout(() => {
+      executeBotAction();
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [game?.turno.jogadorAtualId, game?.turno.acoesRestantes, game?.vencedor]);
+
   // Non-null reference for closures (TS doesn't narrow across function boundaries)
   const g = game;
 

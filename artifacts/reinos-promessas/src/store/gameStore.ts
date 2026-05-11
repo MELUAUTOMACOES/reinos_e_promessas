@@ -8,14 +8,21 @@ import {
   endTurn,
   advancePhase,
   checkVictory,
-  resolveCombat,
-  canAttack,
-  faithOnConquest,
+} from "@/game-core";
+import {
   recruitTroops,
   moveTroops,
   strengthenFaith,
   discardCard,
-} from "@/game-core";
+  attackTerritory,
+  type AttackResult,
+  influenceTerritory,
+  type InfluenceActionResult,
+  buyRandomCardAction,
+  buyMarketCardAction,
+  activateCharacter,
+} from "@/game-core/actions";
+import { decideBotAction } from "@/game-core/bot";
 
 const STORAGE_KEY = "reinos-promessas-save";
 
@@ -37,8 +44,19 @@ interface GameStore {
   strengthenFaithAction: (territoryId: TerritoryId, option: "safe" | "quiz", quizCorrect?: boolean) => { valid: boolean; reason?: string };
   discardCardAction: (cardId: CardId) => { valid: boolean; reason?: string };
 
-  // ── Combat (future) ─────────────────────────────────────────────────────
-  attack: (from: TerritoryId, to: TerritoryId, tropas: number) => void;
+  // ── Combat ──────────────────────────────────────────────────────────────
+  attackTerritoryAction: (fromId: TerritoryId, toId: TerritoryId, tropasUsadas: number) => AttackResult;
+
+  // ── Influence ───────────────────────────────────────────────────────────
+  influenceTerritoryAction: (fromId: TerritoryId, toId: TerritoryId, influencia: number, ouro: number) => InfluenceActionResult;
+
+  // ── Cards ───────────────────────────────────────────────────────────────
+  buyRandomCard: () => { valid: boolean; reason?: string };
+  buyMarketCard: (cardId: CardId) => { valid: boolean; reason?: string };
+  activateCharacterAction: (cardId: CardId) => { valid: boolean; reason?: string };
+
+  // ── Bot ─────────────────────────────────────────────────────────────────
+  executeBotAction: () => void;
 }
 
 // ─── Victory helper ───────────────────────────────────────────────────────────
@@ -129,49 +147,135 @@ export const useGameStore = create<GameStore>()(
         return { valid: result.valid, reason: result.reason };
       },
 
-      // ── attack (future: combat phase) ───────────────────────────────────
-      attack: (fromId, toId, tropas) => {
+      // ── attackTerritoryAction ───────────────────────────────────────────
+      attackTerritoryAction: (fromId, toId, tropasUsadas) => {
         const { game } = get();
-        if (!game || game.vencedor) return;
-
-        const fromT = game.territories.find((t) => t.id === fromId);
-        const toT = game.territories.find((t) => t.id === toId);
-        if (!fromT || !toT) return;
-
-        const { valid, reason } = canAttack(fromT, toT, game.turno.jogadorAtualId);
-        if (!valid) {
-          set({ game: { ...game, log: [...game.log, `Ataque inválido: ${reason}`] } });
-          return;
+        if (!game || game.vencedor) {
+          return { valid: false, reason: "Partida encerrada.", state: game! };
         }
 
-        const result = resolveCombat(tropas, toT);
-        const territories = game.territories.map((t) => {
-          if (t.id === fromId) return { ...t, tropasAtuais: Math.max(1, t.tropasAtuais - result.atacantePerdas) };
-          if (t.id === toId) {
-            if (result.atacanteVenceu) {
-              return faithOnConquest(
-                { ...t, tropasAtuais: tropas - result.atacantePerdas },
-                game.turno.jogadorAtualId
-              );
-            }
-            return { ...t, tropasAtuais: Math.max(1, t.tropasAtuais - result.defensorPerdas) };
+        const result = attackTerritory(game, game.turno.jogadorAtualId, fromId, toId, tropasUsadas);
+        if (result.valid) {
+          set({ game: applyVictoryCheck(result.state) });
+        }
+        return result;
+      },
+
+      // ── influenceTerritoryAction ────────────────────────────────────────
+      influenceTerritoryAction: (fromId, toId, influencia, ouro) => {
+        const { game } = get();
+        if (!game || game.vencedor) {
+          return { valid: false, reason: "Partida encerrada.", state: game! };
+        }
+
+        const result = influenceTerritory(game, game.turno.jogadorAtualId, fromId, toId, influencia, ouro);
+        if (result.valid) {
+          set({ game: applyVictoryCheck(result.state) });
+        }
+        return result;
+      },
+
+      // ── buyRandomCard ───────────────────────────────────────────────────
+      buyRandomCard: () => {
+        const { game } = get();
+        if (!game || game.vencedor) return { valid: false, reason: "Partida encerrada." };
+
+        const result = buyRandomCardAction(game, game.turno.jogadorAtualId);
+        if (result.valid) set({ game: applyVictoryCheck(result.state) });
+        return { valid: result.valid, reason: result.reason };
+      },
+
+      // ── buyMarketCard ───────────────────────────────────────────────────
+      buyMarketCard: (cardId) => {
+        const { game } = get();
+        if (!game || game.vencedor) return { valid: false, reason: "Partida encerrada." };
+
+        const result = buyMarketCardAction(game, game.turno.jogadorAtualId, cardId);
+        if (result.valid) set({ game: applyVictoryCheck(result.state) });
+        return { valid: result.valid, reason: result.reason };
+      },
+
+      // ── activateCharacterAction ─────────────────────────────────────────
+      activateCharacterAction: (cardId) => {
+        const { game } = get();
+        if (!game || game.vencedor) return { valid: false, reason: "Partida encerrada." };
+
+        const result = activateCharacter(game, game.turno.jogadorAtualId, cardId);
+        if (result.valid) set({ game: applyVictoryCheck(result.state) });
+        return { valid: result.valid, reason: result.reason };
+      },
+
+      // ── executeBotAction ─────────────────────────────────────────────────
+      executeBotAction: () => {
+        const { game } = get();
+        if (!game || game.vencedor) return;
+        const pid = game.turno.jogadorAtualId;
+        const player = game.players.find(p => p.id === pid);
+        if (!player || !player.isBot) return;
+        if (game.turno.acoesRestantes <= 0) return;
+
+        const decision = decideBotAction(game, pid);
+
+        switch (decision.type) {
+          case "recruit": {
+            const tid = decision.data.territoryId as TerritoryId;
+            const r = recruitTroops(game, pid, tid);
+            if (r.valid) set({ game: applyVictoryCheck(r.state) });
+            break;
           }
-          return t;
-        });
-
-        const attacker = game.players.find((p) => p.id === game.turno.jogadorAtualId);
-        const logEntry = result.atacanteVenceu
-          ? `${attacker?.name} conquistou ${toT.name}!`
-          : `Ataque de ${attacker?.name} em ${toT.name} foi repelido.`;
-
-        set({
-          game: applyVictoryCheck({
-            ...game,
-            territories,
-            turno: { ...game.turno, atacouNesteturno: true },
-            log: [...game.log, logEntry],
-          }),
-        });
+          case "move": {
+            const from = decision.data.fromId as TerritoryId;
+            const to = decision.data.toId as TerritoryId;
+            const cnt = decision.data.count as number;
+            const r = moveTroops(game, pid, from, to, cnt);
+            if (r.valid) set({ game: applyVictoryCheck(r.state) });
+            break;
+          }
+          case "attack": {
+            const from = decision.data.fromId as TerritoryId;
+            const to = decision.data.toId as TerritoryId;
+            const tropas = decision.data.tropas as number;
+            const r = attackTerritory(game, pid, from, to, tropas);
+            if (r.valid) set({ game: applyVictoryCheck(r.state) });
+            break;
+          }
+          case "faith": {
+            const tid = decision.data.territoryId as TerritoryId;
+            const r = strengthenFaith(game, pid, tid, "safe");
+            if (r.valid) set({ game: applyVictoryCheck(r.state) });
+            break;
+          }
+          case "influence": {
+            const from = decision.data.fromId as TerritoryId;
+            const to = decision.data.toId as TerritoryId;
+            const inf = decision.data.influencia as number;
+            const ouro = decision.data.ouro as number;
+            const r = influenceTerritory(game, pid, from, to, inf, ouro);
+            if (r.valid) set({ game: applyVictoryCheck(r.state) });
+            break;
+          }
+          case "buyRandom": {
+            const r = buyRandomCardAction(game, pid);
+            if (r.valid) set({ game: applyVictoryCheck(r.state) });
+            break;
+          }
+          case "buyMarket": {
+            const cid = decision.data.cardId as CardId;
+            const r = buyMarketCardAction(game, pid, cid);
+            if (r.valid) set({ game: applyVictoryCheck(r.state) });
+            break;
+          }
+          case "activateChar": {
+            const cid = decision.data.cardId as CardId;
+            const r = activateCharacter(game, pid, cid);
+            if (r.valid) set({ game: applyVictoryCheck(r.state) });
+            break;
+          }
+          case "pass":
+          default:
+            set({ game: applyVictoryCheck(advancePhase(game)) });
+            break;
+        }
       },
     }),
     {

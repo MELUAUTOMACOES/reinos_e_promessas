@@ -33,6 +33,8 @@ export type ActionType =
   | "ATACAR"
   | "JOGAR_CARTA"
   | "DESCARTAR_CARTA"
+  | "COMPRAR_CARTA"
+  | "ATIVAR_PERSONAGEM"
   | "ENCERRAR_TURNO"
   | "SALVAR_PARTIDA"
   | "RESETAR_PARTIDA";
@@ -130,6 +132,10 @@ export interface Territory {
   pontoFraco: string;
   /** Biblical/historical context */
   descricao: string;
+  /** Influence success markers (for neutral territories) */
+  marcadoresInfluencia: number;
+  /** Pressure markers from enemy influence (for owned territories) */
+  marcadoresPressao: number;
 }
 
 // ─── Region ──────────────────────────────────────────────────────────────────
@@ -161,26 +167,72 @@ export interface StartingPack {
 
 // ─── Cards ───────────────────────────────────────────────────────────────────
 
-export type CardType = "evento" | "bencao" | "maldicao" | "exercito" | "profecia";
+export type CardType = "personagem" | "tatica" | "missao" | "evento";
+
+export type CardRarity = "comum" | "incomum" | "raro" | "lendario";
+
+export interface CardEffect {
+  /** Tipo de efeito */
+  type: string;
+  /** Valor do efeito */
+  value?: number;
+  /** Duração em rodadas (para efeitos temporários) */
+  duration?: number;
+  /** Condição para ativar o efeito */
+  condition?: string;
+  /** Limite de uso por turno */
+  usesPerTurn?: number;
+}
 
 export interface Card {
   id: CardId;
   name: string;
   type: CardType;
+  rarity: CardRarity;
   description: string;
-  effectKey: string;
+  /** Custo em ouro para comprar no mercado aberto */
+  cost: number;
+  /** Efeitos da carta */
+  effects: CardEffect[];
+  /** Se é carta única (personagens) */
+  unique?: boolean;
+  /** Pontos de legado que a missão concede */
+  legacyPoints?: number;
+  /** Condição para completar missão */
+  missionCondition?: string;
 }
 
 // ─── Objectives ──────────────────────────────────────────────────────────────
 
+export type ObjectiveTier = "medio" | "dificil";
+
 export interface SecretObjective {
   id: ObjectiveId;
+  name: string;
   description: string;
+  tier: ObjectiveTier;
   conditionKey: string;
-  victoryPoints: number;
+  /** Dados específicos necessários para validação */
+  conditionData?: {
+    territories?: string[];
+    faithRequired?: number;
+    resourcesRequired?: number;
+    territoryCount?: number;
+    faithLevel?: number;
+    roundsRequired?: number;
+  };
 }
 
 // ─── Player ──────────────────────────────────────────────────────────────────
+
+export interface ActiveCharacter {
+  /** ID da carta do personagem */
+  cardId: CardId;
+  /** Rodadas restantes de duração */
+  roundsRemaining: number;
+  /** Se o bônus principal já foi usado neste turno */
+  usedThisTurn: boolean;
+}
 
 export interface Player {
   id: PlayerId;
@@ -190,7 +242,10 @@ export interface Player {
   resources: ResourceState;
   cartasNaMao: Card[];
   objetivoSecretoId: ObjectiveId | null;
-  personagemAtivo: string | null;
+  /** Personagem ativo com duração */
+  personagemAtivo: ActiveCharacter | null;
+  /** Missões completadas */
+  missoesCompletadas: CardId[];
   isBot: boolean;
   botDifficulty: BotDifficulty | null;
 }
@@ -251,10 +306,67 @@ export const GAME_MODES: Record<GameMode, GameModeConfig> = {
 // ─── Combat ──────────────────────────────────────────────────────────────────
 
 export interface CombatResult {
+  /** Tropas perdidas pelo atacante */
   atacantePerdas: number;
+  /** Tropas perdidas pelo defensor */
   defensorPerdas: number;
-  atacanteVenceu: boolean;
-  rolls: { atacante: number[]; defensor: number[] };
+  /** Se o atacante conquistou o território (defensor chegou a 0 tropas) */
+  conquistou: boolean;
+  /** Resultado do dado do atacante (1-6) */
+  dadoAtacante: number;
+  /** Resultado do dado do defensor (1-6) */
+  dadoDefensor: number;
+  /** Força total do atacante (tropas + bônus + dado) */
+  forcaAtacante: number;
+  /** Força total do defensor (tropas + defesa + bônus + dado) */
+  forcaDefensor: number;
+  /** Diferença absoluta entre as forças */
+  diferenca: number;
+  /** Quem venceu: 'atacante' | 'defensor' | 'empate' */
+  vencedor: 'atacante' | 'defensor' | 'empate';
+  /** Tipo de vitória: 'empate' | 'apertada' | 'clara' | 'esmagadora' */
+  tipoVitoria: 'empate' | 'apertada' | 'clara' | 'esmagadora';
+  /** Bônus de fé aplicado na defesa */
+  bonusFe: number;
+}
+
+// ─── Influence ───────────────────────────────────────────────────────────────
+
+export interface InfluenceResult {
+  /** Influência investida pelo jogador */
+  influenciaInvestida: number;
+  /** Ouro investido pelo jogador */
+  ouroInvestido: number;
+  /** Bônus de ouro (+1 por cada 2 ouro, máx +2) */
+  bonusOuro: number;
+  /** Resultado do dado do atacante (1-6) */
+  dadoAtacante: number;
+  /** Resultado do dado do defensor (1-6) */
+  dadoDefensor: number;
+  /** Força total do atacante (influência + bônus ouro + dado) */
+  forcaAtacante: number;
+  /** Resistência total do defensor (base + bônus fé + dado) */
+  resistenciaDefensor: number;
+  /** Resistência base do território por tipo */
+  resistenciaBase: number;
+  /** Bônus de fé/estabilidade na resistência */
+  bonusFe: number;
+  /** Se foi um sucesso (atacante venceu) */
+  sucesso: boolean;
+  /** Sucessos acumulados no território */
+  sucessosAcumulados: number;
+  /** Sucessos necessários para dominar */
+  sucessosNecessarios: number;
+  /** Se o território foi dominado */
+  dominou: boolean;
+  /** Redução de fé aplicada (para território inimigo) */
+  reducaoFe: number;
+  /** Marcadores de pressão adicionados (para território inimigo) */
+  marcadoresPressao: number;
+  /** Se território ficou pressionado (2+ marcadores) */
+  ficouPressionado: boolean;
+  /** Vulnerabilidade extra por território rebelde */
+  vulnerabilidadeRebelde: number;
 }
 
 // ─── Game State ──────────────────────────────────────────────────────────────
@@ -268,6 +380,8 @@ export interface GameState {
   regions: Region[];
   deck: Card[];
   descarte: Card[];
+  /** Mercado com 3 cartas abertas */
+  mercado: Card[];
   vencedor: PlayerId | null;
   log: string[];
   savedAt: string | null;

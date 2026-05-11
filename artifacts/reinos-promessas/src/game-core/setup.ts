@@ -1,16 +1,18 @@
-
 import type {
   GameState,
   NewGameConfig,
   Player,
   Territory,
   TurnState,
+  Card,
 } from "@/types";
 import { TERRITORIES } from "@/game-data/territories";
 import { REGIONS } from "@/game-data/regions";
 import { CARDS } from "@/game-data/cards";
 import { FACTIONS } from "@/game-data/factions";
 import { STARTING_PACKS } from "@/game-data/startingPacks";
+import { getRandomObjective } from "@/game-data/objectives";
+import { shuffleDeck } from "./cards";
 import { updateTerritoryState } from "./faith";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -110,6 +112,9 @@ export function createNewGame(config: NewGameConfig): GameState {
       territoryMap.set(tid, updated);
     }
 
+    // Sortear objetivo secreto tier médio
+    const objective = getRandomObjective("medio");
+
     return {
       id: `player_${index}`,
       name: pc.name,
@@ -117,8 +122,9 @@ export function createNewGame(config: NewGameConfig): GameState {
       faction: faction.name,
       resources: { ...STARTING_RESOURCES },
       cartasNaMao: [],
-      objetivoSecretoId: null as null,
-      personagemAtivo: null as null,
+      objetivoSecretoId: objective.id,
+      personagemAtivo: null,
+      missoesCompletadas: [],
       isBot: pc.isBot,
       botDifficulty: pc.botDifficulty ?? null,
     };
@@ -137,8 +143,10 @@ export function createNewGame(config: NewGameConfig): GameState {
     historicoAcoes: [],
   };
 
-  // ── Shuffle deck ──────────────────────────────────────────────────────────
-  const deck = shuffleArray(CARDS);
+  // ── Shuffle deck and setup market ────────────────────────────────────────
+  const shuffledDeck = shuffleDeck(CARDS);
+  const mercado = shuffledDeck.slice(0, 3);
+  const deck = shuffledDeck.slice(3);
 
   return {
     id: `game_${Date.now()}`,
@@ -149,10 +157,12 @@ export function createNewGame(config: NewGameConfig): GameState {
     regions: REGIONS,
     deck,
     descarte: [],
+    mercado,
     vencedor: null,
     log: [
       `Partida iniciada! Modo: ${mode === "padrao" ? "Padrão (150 Legado)" : "Rápido (100 Legado)"}.`,
       `${firstPlayer.name} começa a primeira rodada.`,
+      `Cada jogador recebeu um objetivo secreto.`,
     ],
     savedAt: null,
   };

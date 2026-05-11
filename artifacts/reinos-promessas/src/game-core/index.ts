@@ -44,3 +44,7 @@ export { canMove, canAttack, findReachable } from "./movement";
 // ── Victory ──────────────────────────────────────────────────────────────────
 export { checkVictory } from "./victory";
 export type { VictoryCheck } from "./victory";
+
+// ── Bot ──────────────────────────────────────────────────────────────────────
+export { decideBotAction } from "./bot";
+export type { BotActionResult } from "./bot";
