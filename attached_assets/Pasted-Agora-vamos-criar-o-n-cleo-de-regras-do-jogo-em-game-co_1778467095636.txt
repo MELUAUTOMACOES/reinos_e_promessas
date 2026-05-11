@@ -1,0 +1,107 @@
+Agora vamos criar o núcleo de regras do jogo em `game-core`.
+
+## Objetivo desta etapa
+
+Implementar a criação de uma nova partida local e o fluxo básico de turno.
+
+## Regras de setup
+
+Cada jogador começa com:
+
+- 8 tropas
+- 4 provisões
+- 3 ouro
+- 2 influência
+- 0 legado
+- 1 carta inicial futuramente, mas por enquanto pode deixar vazio
+- 1 objetivo secreto futuramente, por enquanto pode deixar placeholder
+- 2 territórios iniciais vindos de um pacote inicial
+
+Ao escolher pacote inicial:
+
+- os territórios passam a ser do jogador;
+- as tropas neutras desses territórios somem;
+- o jogador distribui 8 tropas entre os dois territórios;
+- para MVP, distribua automaticamente 4 e 4;
+- mínimo futuro será 2 tropas em cada território.
+
+## Fluxo de turno
+
+Cada turno deve ter:
+
+- jogador atual
+- rodada atual
+- ações restantes: 3
+- índice do jogador atual
+- histórico de ações
+
+## Produção
+
+No início do turno do jogador, cada território controlado por ele gera produção.
+
+Produções possíveis:
+
+- provisão
+- ouro
+- influência
+- fé
+- militar/tropa local
+
+Respeite limites:
+
+- provisão inicial máxima: 12
+- ouro inicial máximo: 10
+- influência inicial máxima: 8
+
+Se passar do limite, perde excedente.
+
+Quando território produz militar, adicionar tropa naquele território respeitando limite do território:
+
+- comum: 6
+- estratégico: 8
+- sagrado: 10
+- capital: 12
+
+## Estados de território
+
+Se fé estiver:
+
+- 0–19: rebelde
+- 20–39: fraco
+- 40–59: estável
+- 60–79: forte
+- 80–100: fiel/protegido
+
+Ao atualizar fé, atualizar estado automaticamente.
+
+## Funções esperadas
+
+Implemente funções puras como:
+
+- createNewGame(config)
+- startTurn(gameState)
+- endTurn(gameState)
+- applyProduction(gameState, playerId)
+- getTerritoryFaithStatus(faith)
+- getTroopLimit(territory)
+- updateTerritoryState(territory)
+
+## Resultado esperado
+
+Ao final, quero conseguir iniciar uma partida local com:
+
+- 2 a 6 jogadores;
+- humanos ou bots marcados, mesmo que bot ainda não jogue;
+- modo rápido ou padrão;
+- pacotes iniciais atribuídos;
+- turno inicial funcionando;
+- produção aplicada no início do turno;
+- passar turno funcionando.
+
+## Importante
+
+Não implemente combate ainda.
+
+Não implemente UI complexa ainda.
+
+Foco em engine limpa e testável.

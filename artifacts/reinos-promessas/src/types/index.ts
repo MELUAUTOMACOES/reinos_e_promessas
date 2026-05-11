@@ -43,6 +43,21 @@ export type CardId = string;
 export type ObjectiveId = string;
 export type PackId = string;
 
+// ─── Resource limits & troop limits ──────────────────────────────────────────
+
+export const RESOURCE_LIMITS = {
+  provisao: 12,
+  ouro: 10,
+  influencia: 8,
+} as const;
+
+export const TROOP_LIMITS: Record<TerritoryType, number> = {
+  comum: 6,
+  estrategico: 8,
+  sagrado: 10,
+  capital: 12,
+};
+
 // ─── Resources ───────────────────────────────────────────────────────────────
 
 export interface ResourceState {
@@ -71,6 +86,8 @@ export interface TerritoryProduction {
   provisao: number;
   ouro: number;
   influencia: number;
+  /** Military production: troops added to this territory each turn (optional) */
+  militar?: number;
 }
 
 // ─── Territory ───────────────────────────────────────────────────────────────
@@ -96,7 +113,7 @@ export interface Territory {
   tropasAtuais: number;
   /** Player who currently owns this territory (null = neutral) */
   donoAtual: PlayerId | null;
-  /** Control state */
+  /** Control state — derived from ownership + faith */
   estado: TerritoryControlState;
   /** Whether the territory is locked at game start */
   bloqueado: boolean;
@@ -175,16 +192,44 @@ export interface Player {
   botDifficulty: BotDifficulty | null;
 }
 
+// ─── New Game Config ──────────────────────────────────────────────────────────
+
+export interface NewGamePlayerConfig {
+  name: string;
+  factionId: string;
+  packId: PackId;
+  isBot: boolean;
+  botDifficulty?: BotDifficulty;
+}
+
+export interface NewGameConfig {
+  mode: GameMode;
+  players: NewGamePlayerConfig[];
+}
+
+// ─── Turn Action Log ──────────────────────────────────────────────────────────
+
+export interface TurnAction {
+  type: ActionType;
+  description: string;
+  timestamp: number;
+}
+
 // ─── Turn State ──────────────────────────────────────────────────────────────
 
 export interface TurnState {
   rodada: number;
   fase: TurnPhase;
   jogadorAtualId: PlayerId;
+  indiceJogadorAtual: number;
+  /** Remaining player actions this turn (starts at 3) */
+  acoesRestantes: number;
   /** Territories already moved from this turn */
   territoriosMovidosNesteturno: TerritoryId[];
   /** Whether the player already attacked this turn */
   atacouNesteturno: boolean;
+  /** Log of actions taken this turn */
+  historicoAcoes: TurnAction[];
 }
 
 // ─── Game Mode Config ─────────────────────────────────────────────────────────
