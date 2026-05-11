@@ -1,0 +1,110 @@
+Você vai iniciar o projeto **Reinos & Promessas**, um jogo web de estratégia territorial bíblico inspirado em War, ambientado no Antigo Testamento.
+
+Quero começar com um MVP jogável local, sem backend, sem login e sem multiplayer real por enquanto.
+
+## Objetivo desta primeira etapa
+
+Criar a base técnica do projeto com arquitetura limpa, separando a lógica do jogo da interface.
+
+## Stack desejada
+
+Use:
+
+- TypeScript
+- React
+- Vite
+- Tailwind CSS
+- Zustand ou useReducer para estado local
+- localStorage para salvar partida local
+- Estrutura preparada para futuramente reaproveitar a lógica no Expo/React Native
+
+## O que NÃO quero agora
+
+Não criar agora:
+
+- backend
+- banco de dados
+- login
+- Google OAuth
+- multiplayer
+- WebSocket
+- ranking
+- sistema de amigos
+- tela mobile avançada
+- monetização
+- autenticação
+- deploy complexo
+
+O foco agora é validar as regras internas e a jogabilidade.
+
+## Estrutura desejada
+
+Crie uma estrutura parecida com:
+
+reinos-promessas/
+  apps/
+    web/
+  packages/
+    game-core/
+    game-data/
+
+Se o Replit dificultar monorepo, pode manter tudo em um único projeto Vite, mas ainda separando logicamente assim:
+
+src/
+  game-core/
+  game-data/
+  components/
+  pages/
+  store/
+  types/
+
+## Responsabilidades
+
+### game-core
+
+Deve conter apenas regras puras do jogo, sem React.
+
+Exemplos:
+
+- produção de recursos
+- fluxo de turno
+- combate
+- movimento
+- influência
+- fé/estabilidade
+- vitória
+- cartas
+- bots futuramente
+
+### game-data
+
+Deve conter os dados estáticos:
+
+- territórios
+- conexões
+- regiões
+- pacotes iniciais
+- cartas
+- objetivos secretos
+- perguntas bíblicas futuramente
+
+### apps/web ou src/components
+
+Deve conter apenas interface.
+
+## Resultado esperado desta etapa
+
+Ao final, quero:
+
+1. projeto rodando com React + Vite + TypeScript;
+2. Tailwind configurado;
+3. estrutura de pastas criada;
+4. tipos principais criados;
+5. arquivos iniciais vazios/placeholder para game-core e game-data;
+6. tela inicial simples dizendo “Reinos & Promessas” e botão “Nova Partida”, ainda sem lógica completa.
+
+## Importante
+
+Não implemente regras do jogo ainda além do necessário para compilar.
+
+Quero primeiro a base organizada.
