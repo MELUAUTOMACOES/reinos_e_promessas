@@ -1,41 +1,46 @@
 
-import type { CombatResult } from "@/types";
+import type { CombatResult, Territory } from "@/types";
+import { calculateEffectiveDefense } from "./faith";
 
 /**
- * Simulates a single combat round between attacker and defender armies.
- * Uses dice-based resolution similar to Risk/War board games.
+ * Simulates a combat round between attacker and defender.
+ * Uses dice-based resolution with faith-adjusted defense.
  * Pure function — no side effects.
  */
 export function resolveCombat(
-  attackerArmies: number,
-  defenderArmies: number
+  atacanteTropas: number,
+  territory: Territory
 ): CombatResult {
-  const attackDice = Math.min(attackerArmies, 3);
-  const defenseDice = Math.min(defenderArmies, 2);
+  const defesaEfetiva = calculateEffectiveDefense(territory);
+  const defensorTropas = territory.tropasAtuais;
 
-  const attackRolls = rollDice(attackDice).sort((a, b) => b - a);
-  const defenseRolls = rollDice(defenseDice).sort((a, b) => b - a);
+  const atacanteDados = Math.min(atacanteTropas, 3);
+  const defensorDados = Math.min(defensorTropas + defesaEfetiva - territory.defesaNatural, 2);
+  const defensorDadosReal = Math.max(1, Math.min(defensorDados, 2));
 
-  let attackerLosses = 0;
-  let defenderLosses = 0;
+  const rolagemAtacante = rolarDados(atacanteDados).sort((a, b) => b - a);
+  const rolagemDefensor = rolarDados(defensorDadosReal).sort((a, b) => b - a);
 
-  const comparisons = Math.min(attackRolls.length, defenseRolls.length);
-  for (let i = 0; i < comparisons; i++) {
-    if (attackRolls[i] > defenseRolls[i]) {
-      defenderLosses++;
+  let atacantePerdas = 0;
+  let defensorPerdas = 0;
+
+  const comparacoes = Math.min(rolagemAtacante.length, rolagemDefensor.length);
+  for (let i = 0; i < comparacoes; i++) {
+    if (rolagemAtacante[i] > rolagemDefensor[i]) {
+      defensorPerdas++;
     } else {
-      attackerLosses++;
+      atacantePerdas++;
     }
   }
 
   return {
-    attackerLosses,
-    defenderLosses,
-    attackerWon: defenderArmies - defenderLosses <= 0,
-    rolls: { attacker: attackRolls, defender: defenseRolls },
+    atacantePerdas,
+    defensorPerdas,
+    atacanteVenceu: defensorTropas - defensorPerdas <= 0,
+    rolls: { atacante: rolagemAtacante, defensor: rolagemDefensor },
   };
 }
 
-function rollDice(count: number): number[] {
+function rolarDados(count: number): number[] {
   return Array.from({ length: count }, () => Math.floor(Math.random() * 6) + 1);
 }

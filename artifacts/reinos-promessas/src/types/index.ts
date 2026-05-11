@@ -1,134 +1,226 @@
 
-// ─── Player ──────────────────────────────────────────────────────────────────
+// ─── Enums / Union types ─────────────────────────────────────────────────────
 
+export type TerritoryType = "comum" | "estrategico" | "sagrado" | "capital";
+
+export type TerritoryControlState =
+  | "neutro"
+  | "controlado"
+  | "instavel"
+  | "pressionado"
+  | "rebelde";
+
+export type FaithLevel = "rebelde" | "fraco" | "estavel" | "forte" | "fiel";
+
+export type BotDifficulty = "facil" | "medio" | "dificil";
+
+export type GameMode = "rapido" | "padrao";
+
+export type TurnPhase =
+  | "setup"
+  | "producao"
+  | "cartas"
+  | "movimento"
+  | "combate"
+  | "fim_turno";
+
+export type ActionType =
+  | "INICIAR_PARTIDA"
+  | "AVANCAR_FASE"
+  | "MOVER_TROPAS"
+  | "ATACAR"
+  | "JOGAR_CARTA"
+  | "ENCERRAR_TURNO"
+  | "SALVAR_PARTIDA"
+  | "RESETAR_PARTIDA";
+
+// ─── IDs ─────────────────────────────────────────────────────────────────────
+
+export type TerritoryId = string;
+export type RegionId = string;
 export type PlayerId = string;
-
-export interface Player {
-  id: PlayerId;
-  name: string;
-  color: string;
-  /** Faction/kingdom name (e.g. "Israel", "Judá", "Filisteus") */
-  faction: string;
-  resources: Resources;
-  faith: number;       // 0–100, affects special abilities
-  stability: number;   // 0–100, affects revolt/defection risk
-  isBot: boolean;
-  secretObjectiveId: string | null;
-}
+export type CardId = string;
+export type ObjectiveId = string;
+export type PackId = string;
 
 // ─── Resources ───────────────────────────────────────────────────────────────
 
-export interface Resources {
-  gold: number;
-  food: number;
-  faith: number;
+export interface ResourceState {
+  /** Alimento / mantimento das tropas */
+  provisao: number;
+  /** Moeda para recrutamento e melhorias */
+  ouro: number;
+  /** Poder político, diplomacia e aliança */
+  influencia: number;
+  /** Pontuação de longo prazo / condição de vitória */
+  legado: number;
+}
+
+// ─── Territory Improvements ──────────────────────────────────────────────────
+
+export type TerritoryImprovement =
+  | "fortaleza"
+  | "templo"
+  | "mercado"
+  | "estrada"
+  | "aqueduto";
+
+// ─── Territory Production ────────────────────────────────────────────────────
+
+export interface TerritoryProduction {
+  provisao: number;
+  ouro: number;
+  influencia: number;
 }
 
 // ─── Territory ───────────────────────────────────────────────────────────────
-
-export type TerritoryId = string;
 
 export interface Territory {
   id: TerritoryId;
   name: string;
   regionId: RegionId;
-  /** IDs of adjacent territories */
-  adjacentIds: TerritoryId[];
-  /** Player who currently controls this territory (null = neutral) */
-  ownerId: PlayerId | null;
-  armies: number;
-  /** Bonus production when held */
-  resourceBonus: Partial<Resources>;
+  type: TerritoryType;
   /** Pixel position for map rendering */
   position: { x: number; y: number };
+  /** IDs of adjacent territories */
+  connections: TerritoryId[];
+  /** Bonus to defense rolls (1–5) */
+  defesaNatural: number;
+  /** Faith starting baseline (0–100) */
+  feBase: number;
+  /** Current faith value (0–100, runtime) */
+  feAtual: number;
+  /** Neutral troop count at game start */
+  tropasNeutrasIniciais: number;
+  /** Current troop count (runtime) */
+  tropasAtuais: number;
+  /** Player who currently owns this territory (null = neutral) */
+  donoAtual: PlayerId | null;
+  /** Control state */
+  estado: TerritoryControlState;
+  /** Whether the territory is locked at game start */
+  bloqueado: boolean;
+  /** Base resource production per turn */
+  producao: TerritoryProduction;
+  /** Active improvements */
+  melhorias: TerritoryImprovement[];
+  /** Thematic strength note */
+  pontoForte: string;
+  /** Thematic weakness note */
+  pontoFraco: string;
+  /** Biblical/historical context */
+  descricao: string;
 }
 
 // ─── Region ──────────────────────────────────────────────────────────────────
 
-export type RegionId = string;
+export interface RegionBonus {
+  provisao?: number;
+  ouro?: number;
+  influencia?: number;
+  legado?: number;
+}
 
 export interface Region {
   id: RegionId;
   name: string;
   territoryIds: TerritoryId[];
-  /** Bonus granted to player who controls all territories in the region */
-  controlBonus: Partial<Resources>;
+  /** Bonus granted to player who controls ALL territories in the region */
+  bonusControle: RegionBonus;
+  description: string;
+}
+
+// ─── Starting Pack ───────────────────────────────────────────────────────────
+
+export interface StartingPack {
+  id: PackId;
+  label: string;
+  territoryIds: [TerritoryId, TerritoryId];
+  description: string;
 }
 
 // ─── Cards ───────────────────────────────────────────────────────────────────
 
-export type CardId = string;
-
-export type CardType = "event" | "blessing" | "curse" | "army" | "prophecy";
+export type CardType = "evento" | "bencao" | "maldicao" | "exercito" | "profecia";
 
 export interface Card {
   id: CardId;
   name: string;
   type: CardType;
   description: string;
-  /** Effect applied when played — resolved by game-core */
   effectKey: string;
 }
 
 // ─── Objectives ──────────────────────────────────────────────────────────────
 
-export type ObjectiveId = string;
-
 export interface SecretObjective {
   id: ObjectiveId;
   description: string;
-  /** Condition evaluated by game-core/victory.ts */
   conditionKey: string;
   victoryPoints: number;
 }
 
-// ─── Turn / Phase ─────────────────────────────────────────────────────────────
+// ─── Player ──────────────────────────────────────────────────────────────────
 
-export type GamePhase =
-  | "setup"
-  | "production"
-  | "cards"
-  | "movement"
-  | "combat"
-  | "end_turn";
+export interface Player {
+  id: PlayerId;
+  name: string;
+  color: string;
+  faction: string;
+  resources: ResourceState;
+  cartasNaMao: Card[];
+  objetivoSecretoId: ObjectiveId | null;
+  personagemAtivo: string | null;
+  isBot: boolean;
+  botDifficulty: BotDifficulty | null;
+}
+
+// ─── Turn State ──────────────────────────────────────────────────────────────
+
+export interface TurnState {
+  rodada: number;
+  fase: TurnPhase;
+  jogadorAtualId: PlayerId;
+  /** Territories already moved from this turn */
+  territoriosMovidosNesteturno: TerritoryId[];
+  /** Whether the player already attacked this turn */
+  atacouNesteturno: boolean;
+}
+
+// ─── Game Mode Config ─────────────────────────────────────────────────────────
+
+export interface GameModeConfig {
+  mode: GameMode;
+  legadoMaximo: number;
+  label: string;
+}
+
+export const GAME_MODES: Record<GameMode, GameModeConfig> = {
+  rapido: { mode: "rapido", legadoMaximo: 100, label: "Partida Rápida" },
+  padrao: { mode: "padrao", legadoMaximo: 150, label: "Partida Padrão" },
+};
 
 // ─── Combat ──────────────────────────────────────────────────────────────────
 
 export interface CombatResult {
-  attackerLosses: number;
-  defenderLosses: number;
-  attackerWon: boolean;
-  rolls: { attacker: number[]; defender: number[] };
+  atacantePerdas: number;
+  defensorPerdas: number;
+  atacanteVenceu: boolean;
+  rolls: { atacante: number[]; defensor: number[] };
 }
 
 // ─── Game State ──────────────────────────────────────────────────────────────
 
 export interface GameState {
   id: string;
-  phase: GamePhase;
-  turn: number;
-  currentPlayerId: PlayerId;
+  mode: GameMode;
+  turno: TurnState;
   players: Player[];
   territories: Territory[];
   regions: Region[];
   deck: Card[];
-  discard: Card[];
-  hands: Record<PlayerId, Card[]>;
-  winner: PlayerId | null;
+  descarte: Card[];
+  vencedor: PlayerId | null;
   log: string[];
-  /** ISO timestamp of last save */
   savedAt: string | null;
 }
-
-// ─── Store Actions ───────────────────────────────────────────────────────────
-
-export type GameAction =
-  | { type: "START_GAME"; playerCount: number }
-  | { type: "ADVANCE_PHASE" }
-  | { type: "MOVE_ARMIES"; from: TerritoryId; to: TerritoryId; count: number }
-  | { type: "ATTACK"; from: TerritoryId; to: TerritoryId; armies: number }
-  | { type: "PLAY_CARD"; cardId: CardId }
-  | { type: "END_TURN" }
-  | { type: "SAVE_GAME" }
-  | { type: "LOAD_GAME" }
-  | { type: "RESET_GAME" };

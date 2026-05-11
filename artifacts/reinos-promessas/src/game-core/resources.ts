@@ -1,5 +1,6 @@
 
-import type { Player, Territory, Resources } from "@/types";
+import type { Player, Territory, ResourceState } from "@/types";
+import { getFaithInfo } from "./faith";
 
 /**
  * Calculates resources produced for a player at the start of their production phase.
@@ -8,20 +9,24 @@ import type { Player, Territory, Resources } from "@/types";
 export function calculateProduction(
   player: Player,
   territories: Territory[]
-): Resources {
-  const controlled = territories.filter((t) => t.ownerId === player.id);
+): ResourceState {
+  const controlled = territories.filter((t) => t.donoAtual === player.id);
 
-  const production: Resources = { gold: 1, food: 1, faith: 0 };
+  const production: ResourceState = {
+    provisao: 1,
+    ouro: 1,
+    influencia: 0,
+    legado: 0,
+  };
 
   for (const territory of controlled) {
-    production.gold += territory.resourceBonus.gold ?? 0;
-    production.food += territory.resourceBonus.food ?? 0;
-    production.faith += territory.resourceBonus.faith ?? 0;
-  }
+    const faithInfo = getFaithInfo(territory.feAtual);
+    const mod = 1 + faithInfo.productionModifier;
 
-  // Faith modifier: high faith boosts production slightly
-  const faithModifier = player.faith >= 75 ? 1 : 0;
-  production.gold += faithModifier;
+    production.provisao += Math.round(territory.producao.provisao * mod);
+    production.ouro += Math.round(territory.producao.ouro * mod);
+    production.influencia += Math.round(territory.producao.influencia * mod);
+  }
 
   return production;
 }
@@ -29,25 +34,26 @@ export function calculateProduction(
 /**
  * Applies produced resources to a player snapshot.
  */
-export function applyProduction(player: Player, produced: Resources): Player {
+export function applyProduction(player: Player, produced: ResourceState): Player {
   return {
     ...player,
     resources: {
-      gold: player.resources.gold + produced.gold,
-      food: player.resources.food + produced.food,
-      faith: player.resources.faith + produced.faith,
+      provisao: player.resources.provisao + produced.provisao,
+      ouro: player.resources.ouro + produced.ouro,
+      influencia: player.resources.influencia + produced.influencia,
+      legado: player.resources.legado + produced.legado,
     },
   };
 }
 
 /**
- * Calculates the army reinforcement count a player receives each turn.
+ * Calculates the troop reinforcement count a player receives each turn.
  * Based on territories controlled (minimum 3).
  */
 export function calculateReinforcements(
   player: Player,
   territories: Territory[]
 ): number {
-  const controlled = territories.filter((t) => t.ownerId === player.id).length;
+  const controlled = territories.filter((t) => t.donoAtual === player.id).length;
   return Math.max(3, Math.floor(controlled / 3));
 }

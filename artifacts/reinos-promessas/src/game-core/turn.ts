@@ -1,12 +1,12 @@
 
-import type { GameState, GamePhase, PlayerId } from "@/types";
+import type { GameState, TurnPhase, PlayerId } from "@/types";
 
-const PHASE_ORDER: GamePhase[] = [
-  "production",
-  "cards",
-  "movement",
-  "combat",
-  "end_turn",
+const PHASE_ORDER: TurnPhase[] = [
+  "producao",
+  "cartas",
+  "movimento",
+  "combate",
+  "fim_turno",
 ];
 
 /**
@@ -14,7 +14,7 @@ const PHASE_ORDER: GamePhase[] = [
  * Pure function — returns a new GameState snapshot.
  */
 export function advancePhase(state: GameState): GameState {
-  const currentIndex = PHASE_ORDER.indexOf(state.phase);
+  const currentIndex = PHASE_ORDER.indexOf(state.turno.fase);
 
   if (currentIndex === -1 || currentIndex === PHASE_ORDER.length - 1) {
     return advanceToNextPlayer(state);
@@ -22,13 +22,13 @@ export function advancePhase(state: GameState): GameState {
 
   return {
     ...state,
-    phase: PHASE_ORDER[currentIndex + 1],
+    turno: { ...state.turno, fase: PHASE_ORDER[currentIndex + 1] },
   };
 }
 
 function advanceToNextPlayer(state: GameState): GameState {
   const currentPlayerIndex = state.players.findIndex(
-    (p) => p.id === state.currentPlayerId
+    (p) => p.id === state.turno.jogadorAtualId
   );
   const nextPlayerIndex = (currentPlayerIndex + 1) % state.players.length;
   const nextPlayer = state.players[nextPlayerIndex];
@@ -36,12 +36,16 @@ function advanceToNextPlayer(state: GameState): GameState {
 
   return {
     ...state,
-    phase: "production",
-    currentPlayerId: nextPlayer.id,
-    turn: isNewRound ? state.turn + 1 : state.turn,
+    turno: {
+      rodada: isNewRound ? state.turno.rodada + 1 : state.turno.rodada,
+      fase: "producao",
+      jogadorAtualId: nextPlayer.id,
+      territoriosMovidosNesteturno: [],
+      atacouNesteturno: false,
+    },
     log: [
       ...state.log,
-      `Turno ${state.turn}${isNewRound ? ` → Rodada ${state.turn + 1}` : ""}: vez de ${nextPlayer.name}`,
+      `${isNewRound ? `Rodada ${state.turno.rodada + 1} começa. ` : ""}Vez de ${nextPlayer.name}.`,
     ],
   };
 }

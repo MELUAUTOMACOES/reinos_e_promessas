@@ -1,0 +1,156 @@
+Agora vamos implementar a modelagem base do jogo.
+
+## Contexto
+
+O projeto é **Reinos & Promessas**, um jogo de estratégia territorial no Antigo Testamento.
+
+Estamos criando primeiro um MVP local, sem backend e sem multiplayer.
+
+## Objetivo desta etapa
+
+Criar os tipos TypeScript principais e os dados estáticos iniciais do jogo.
+
+## Tipos necessários
+
+Crie tipos para:
+
+- GameState
+- Player
+- Territory
+- Region
+- ResourceState
+- Card
+- Objective
+- StartingPack
+- GameMode
+- TurnState
+- ActionType
+- TerritoryState
+- BotDifficulty
+
+## Recursos do jogador
+
+Cada jogador deve ter:
+
+- provisão
+- ouro
+- influência
+- legado
+- cartas na mão
+- objetivo secreto
+- personagem ativo, se houver
+
+## Recursos/estado de território
+
+Cada território deve ter:
+
+- id
+- nome
+- região
+- tipo
+- produção
+- defesa natural
+- fé base
+- fé atual
+- tropas neutras iniciais
+- tropas atuais
+- dono atual
+- conexões
+- melhorias
+- estado atual: neutro, controlado, ocupado/instável, pressionado, rebelde
+- ponto forte
+- ponto fraco
+- descrição/contexto
+
+## Tipos de território
+
+Use:
+
+- comum
+- estrategico
+- sagrado
+- capital
+
+## Estados de fé
+
+A fé vai de 0 a 100:
+
+- 0–19: rebelde
+- 20–39: fraco
+- 40–59: estável
+- 60–79: forte
+- 80–100: fiel/protegido
+
+## Modos de partida
+
+- rápido: 100 legado
+- padrão: 150 legado
+
+## Dados do mapa
+
+Cadastre os 24 territórios:
+
+1. Egito
+2. Gósen
+3. Sinai
+4. Deserto de Sur
+5. Hebrom
+6. Jerusalém
+7. Belém
+8. Neguebe
+9. Jericó
+10. Siquém
+11. Samaria
+12. Megido
+13. Filístia
+14. Gaza
+15. Tiro
+16. Sidom
+17. Moabe
+18. Edom
+19. Amom
+20. Gileade
+21. Damasco
+22. Nínive
+23. Babilônia
+24. Susa/Pérsia
+
+Territórios bloqueados como início:
+
+- Jerusalém
+- Jericó
+- Egito
+- Nínive
+- Babilônia
+- Susa/Pérsia
+
+## Pacotes iniciais aprovados
+
+Crie estes 9 pacotes:
+
+A: Gósen + Deserto de Sur  
+B: Hebrom + Neguebe  
+C: Gaza + Neguebe  
+D: Siquém + Gileade  
+E: Moabe + Edom  
+F: Amom + Damasco  
+G: Belém + Filístia  
+H: Sidom + Damasco  
+I: Moabe + Gileade
+
+## Resultado esperado
+
+Ao final, quero:
+
+1. todos os tipos criados;
+2. territories.ts com os 24 territórios;
+3. regions.ts com as 6 regiões e bônus regionais;
+4. startingPacks.ts com os 9 pacotes iniciais;
+5. helpers para calcular estado de fé;
+6. tudo compilando sem erros.
+
+## Importante
+
+Ainda não implemente interface complexa nem regras completas.
+
+Apenas dados e tipos bem estruturados.

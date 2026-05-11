@@ -2,26 +2,26 @@
 import type { Territory, TerritoryId, PlayerId } from "@/types";
 
 /**
- * Validates whether a player can move armies from one territory to another.
+ * Validates whether a player can move troops from one territory to another.
  * Pure function — no side effects.
  */
 export function canMove(
   from: Territory,
   to: Territory,
   playerId: PlayerId,
-  armyCount: number
+  tropasCount: number
 ): { valid: boolean; reason?: string } {
-  if (from.ownerId !== playerId) {
+  if (from.donoAtual !== playerId) {
     return { valid: false, reason: "Você não controla o território de origem." };
   }
-  if (!from.adjacentIds.includes(to.id)) {
+  if (!from.connections.includes(to.id)) {
     return { valid: false, reason: "Territórios não são adjacentes." };
   }
-  if (armyCount < 1) {
-    return { valid: false, reason: "Deve mover ao menos 1 exército." };
+  if (tropasCount < 1) {
+    return { valid: false, reason: "Deve mover ao menos 1 tropa." };
   }
-  if (armyCount >= from.armies) {
-    return { valid: false, reason: "Deve deixar ao menos 1 exército no território." };
+  if (tropasCount >= from.tropasAtuais) {
+    return { valid: false, reason: "Deve deixar ao menos 1 tropa no território." };
   }
   return { valid: true };
 }
@@ -34,17 +34,20 @@ export function canAttack(
   to: Territory,
   playerId: PlayerId
 ): { valid: boolean; reason?: string } {
-  if (from.ownerId !== playerId) {
+  if (from.donoAtual !== playerId) {
     return { valid: false, reason: "Você não controla o território de origem." };
   }
-  if (to.ownerId === playerId) {
+  if (to.donoAtual === playerId) {
     return { valid: false, reason: "Não pode atacar um território seu." };
   }
-  if (!from.adjacentIds.includes(to.id)) {
+  if (!from.connections.includes(to.id)) {
     return { valid: false, reason: "Territórios não são adjacentes." };
   }
-  if (from.armies < 2) {
-    return { valid: false, reason: "Precisa de ao menos 2 exércitos para atacar." };
+  if (from.tropasAtuais < 2) {
+    return { valid: false, reason: "Precisa de ao menos 2 tropas para atacar." };
+  }
+  if (to.bloqueado) {
+    return { valid: false, reason: "Este território está bloqueado e não pode ser atacado ainda." };
   }
   return { valid: true };
 }
@@ -68,9 +71,9 @@ export function findReachable(
     visited.add(current);
 
     const territory = map.get(current);
-    if (!territory || territory.ownerId !== playerId) continue;
+    if (!territory || territory.donoAtual !== playerId) continue;
 
-    for (const adjId of territory.adjacentIds) {
+    for (const adjId of territory.connections) {
       if (!visited.has(adjId)) queue.push(adjId);
     }
   }
