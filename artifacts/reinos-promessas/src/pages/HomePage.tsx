@@ -7,73 +7,71 @@ import { GAME_MODES } from "@/types";
 import { FACTIONS } from "@/game-data/factions";
 import { STARTING_PACKS } from "@/game-data/startingPacks";
 
-// ── Setup step management ─────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-type SetupStep = "idle" | "count" | "packs" | "confirm";
+type SetupStep = "landing" | "config";
 
-interface PlayerSetup {
-  factionIdx: number;
-  packId: string;
+interface PlayerConfig {
+  name: string;
   isBot: boolean;
+  botDifficulty: BotDifficulty;
+  factionIdx: number;
 }
 
-function buildConfig(
-  mode: GameMode,
-  playerCount: number,
-  setups: PlayerSetup[],
-  shuffledFactions: typeof FACTIONS
-): NewGameConfig {
-  return {
-    mode,
-    players: setups.slice(0, playerCount).map((s, i) => {
-      const faction = shuffledFactions[s.factionIdx % shuffledFactions.length];
-      return {
-        name: s.isBot ? `Bot — ${faction.name}` : faction.name,
-        factionId: faction.id,
-        packId: s.packId,
-        isBot: s.isBot,
-        botDifficulty: s.isBot ? ("medio" as BotDifficulty) : undefined,
-      };
-    }),
-  };
-}
+const PLAYER_COLORS = [
+  "#1d4ed8", "#7c3aed", "#dc2626", "#b45309", "#059669", "#0891b2",
+];
 
-// ── Component ─────────────────────────────────────────────────────────────────
+const DEFAULT_BOT_NAMES = [
+  "Bot Absalão", "Bot Golias", "Bot Jezabel",
+  "Bot Senaque", "Bot Nabucodonosor",
+];
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function HomePage() {
   const [, setLocation] = useLocation();
   const { startGame, hasSavedGame, resetGame, game } = useGameStore();
 
-  const [step, setStep] = useState<SetupStep>("idle");
-  const [playerCount, setPlayerCount] = useState(2);
+  const [step, setStep] = useState<SetupStep>("landing");
+  const [playerCount, setPlayerCount] = useState(3);
   const [mode, setMode] = useState<GameMode>("padrao");
-  const [humanPackId, setHumanPackId] = useState(STARTING_PACKS[0].id);
 
-  // Shuffle factions once per component lifecycle
-  const [shuffledFactions] = useState(() => {
-    const arr = [...FACTIONS];
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [arr[i], arr[j]] = [arr[j], arr[i]];
-    }
-    return arr;
-  });
+  const [players, setPlayers] = useState<PlayerConfig[]>(() =>
+    Array.from({ length: 6 }, (_, i) => ({
+      name: i === 0 ? "" : DEFAULT_BOT_NAMES[i - 1] ?? `Bot ${i}`,
+      isBot: i !== 0,
+      botDifficulty: "medio" as BotDifficulty,
+      factionIdx: i,
+    }))
+  );
+
+  function updatePlayer(index: number, patch: Partial<PlayerConfig>) {
+    setPlayers((prev) => prev.map((p, i) => (i === index ? { ...p, ...patch } : p)));
+  }
 
   function handleStartGame() {
-    // Human is player 0, bots fill the rest with different packs
-    const usedPacks = new Set<string>([humanPackId]);
-    const botPacks = STARTING_PACKS.filter((p) => !usedPacks.has(p.id));
+    // Assign packs automatically, rotating through available packs
+    const usedPacks = new Set<string>();
+    const packList = [...STARTING_PACKS];
 
-    const setups: PlayerSetup[] = Array.from({ length: playerCount }, (_, i) => {
-      if (i === 0) {
-        return { factionIdx: 0, packId: humanPackId, isBot: false };
-      }
-      const pack = botPacks[(i - 1) % botPacks.length];
-      usedPacks.add(pack.id);
-      return { factionIdx: i, packId: pack.id, isBot: true };
-    });
+    const config: NewGameConfig = {
+      mode,
+      players: players.slice(0, playerCount).map((p, i) => {
+        const faction = FACTIONS[p.factionIdx % FACTIONS.length];
+        // Pick first available pack
+        const pack = packList.find((pk) => !usedPacks.has(pk.id)) ?? packList[i % packList.length];
+        usedPacks.add(pack.id);
+        return {
+          name: p.name.trim() || (i === 0 ? faction.name : DEFAULT_BOT_NAMES[i - 1] ?? `Bot ${i}`),
+          factionId: faction.id,
+          packId: pack.id,
+          isBot: p.isBot,
+          botDifficulty: p.isBot ? p.botDifficulty : undefined,
+        };
+      }),
+    };
 
-    const config = buildConfig(mode, playerCount, setups, shuffledFactions);
     startGame(config);
     setLocation("/game");
   }
@@ -81,211 +79,258 @@ export default function HomePage() {
   function handleReset() {
     if (confirm("Apagar partida salva? Esta ação não pode ser desfeita.")) {
       resetGame();
-      setStep("idle");
     }
   }
 
-  const humanFaction = shuffledFactions[0];
+  // ── Landing ──────────────────────────────────────────────────────────────
 
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-amber-950 via-amber-900 to-stone-950 relative overflow-hidden">
-      {/* Background pattern */}
-      <div
-        className="absolute inset-0 opacity-10 pointer-events-none"
-        style={{
-          backgroundImage:
-            "url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23d97706' fill-opacity='0.4'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")",
-        }}
-      />
+  if (step === "landing") {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-amber-950 via-amber-900 to-stone-950 relative overflow-hidden px-4">
+        {/* Subtle cross-hatch pattern */}
+        <div
+          className="absolute inset-0 opacity-[0.07] pointer-events-none"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='%23d97706' fill-opacity='1'%3E%3Cpath d='M0 20h40v1H0zM20 0v40h1V0z'/%3E%3C/g%3E%3C/svg%3E")`,
+          }}
+        />
 
-      <div className="relative z-10 flex flex-col items-center gap-8 px-4 text-center max-w-lg w-full">
-        {/* Logo */}
-        <div className="text-amber-400 text-5xl select-none">✦</div>
-        <div>
-          <h1
-            className="text-5xl font-bold text-amber-100 tracking-wide drop-shadow-lg"
-            style={{ fontFamily: "Georgia, serif", textShadow: "0 2px 20px rgba(217,119,6,0.6)" }}
-          >
-            Reinos &amp; Promessas
-          </h1>
-          <p className="mt-3 text-amber-300 tracking-widest uppercase text-sm">
-            Estratégia Bíblica
+        <div className="relative z-10 flex flex-col items-center gap-7 max-w-sm w-full text-center">
+          <div className="text-amber-400 text-4xl select-none leading-none">✦</div>
+
+          <div>
+            <h1
+              className="text-5xl font-bold text-amber-100 tracking-wide"
+              style={{
+                fontFamily: "Georgia, serif",
+                textShadow: "0 2px 30px rgba(217,119,6,0.5)",
+              }}
+            >
+              Reinos &amp;<br />Promessas
+            </h1>
+            <p className="mt-3 text-amber-400/80 tracking-[0.3em] uppercase text-xs font-medium">
+              Estratégia Bíblica
+            </p>
+          </div>
+
+          <p className="text-amber-200/60 text-sm leading-relaxed max-w-xs">
+            Conquiste as terras do Antigo Testamento. Controle territórios, gerencie fé e recursos, e erga seu legado sobre as nações.
           </p>
-        </div>
 
-        <p className="text-amber-200/70 text-sm max-w-xs leading-relaxed">
-          Conquiste as terras do Antigo Testamento, cumpra as promessas divinas e erga seu reino sobre a areia dos séculos.
-        </p>
-
-        {/* ── IDLE ──────────────────────────────────────────────────────────── */}
-        {step === "idle" && (
           <div className="flex flex-col gap-3 w-full">
             <button
-              onClick={() => setStep("count")}
-              className="w-full py-4 bg-amber-600 hover:bg-amber-500 text-white font-bold text-lg rounded-xl transition-all shadow-lg shadow-amber-900/50 active:scale-95 border border-amber-500/30"
+              onClick={() => setStep("config")}
+              className="w-full py-4 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white font-bold text-base rounded-xl transition-all shadow-xl shadow-amber-900/40 border border-amber-500/30"
             >
               Nova Partida
             </button>
+
             {hasSavedGame() && game && (
               <button
                 onClick={() => setLocation("/game")}
-                className="w-full py-3 bg-amber-950/60 hover:bg-amber-900/60 text-amber-200 font-semibold rounded-xl transition-all border border-amber-700/40 backdrop-blur-sm active:scale-95"
+                className="w-full py-3 bg-stone-900/70 hover:bg-stone-800/70 text-amber-200 font-semibold rounded-xl transition-all border border-amber-700/30 backdrop-blur-sm"
               >
                 Continuar Partida
-                <span className="block text-amber-400/60 text-xs font-normal mt-0.5">
-                  Rodada {game.turno.rodada} · {game.players.find((p) => !p.isBot)?.faction} ·{" "}
-                  {GAME_MODES[game.mode].label}
+                <span className="block text-amber-500/60 text-xs font-normal mt-0.5">
+                  Rodada {game.turno.rodada} · {GAME_MODES[game.mode].label} ·{" "}
+                  {game.players.find((p) => p.id === game.turno.jogadorAtualId)?.name}
                 </span>
               </button>
             )}
-            {hasSavedGame() && (
-              <button
-                onClick={handleReset}
-                className="text-amber-700/70 text-sm hover:text-amber-500 transition-colors mt-1"
-              >
-                Apagar partida salva
-              </button>
-            )}
           </div>
-        )}
 
-        {/* ── COUNT + MODE ──────────────────────────────────────────────────── */}
-        {step === "count" && (
-          <div className="w-full bg-amber-950/60 border border-amber-700/40 rounded-xl p-6 flex flex-col gap-5 backdrop-blur-sm">
-            <h2 className="text-amber-200 font-semibold text-lg text-left">Configurar Partida</h2>
+          {hasSavedGame() && (
+            <button
+              onClick={handleReset}
+              className="text-amber-800 hover:text-amber-600 text-xs transition-colors mt-1"
+            >
+              Apagar partida salva
+            </button>
+          )}
 
-            {/* Player count */}
-            <div className="flex flex-col gap-2 text-left">
-              <label className="text-amber-400 text-xs uppercase tracking-widest">Jogadores</label>
-              <div className="flex gap-2">
-                {[2, 3, 4, 5, 6].map((n) => (
+          <p className="text-amber-900 text-xs mt-2">
+            MVP local · 24 territórios · Sem backend
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Config ──────────────────────────────────────────────────────────────
+
+  return (
+    <div className="min-h-screen bg-stone-950 flex flex-col items-center justify-start py-8 px-4 overflow-y-auto">
+      <div className="w-full max-w-lg">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-6">
+          <button
+            onClick={() => setStep("landing")}
+            className="text-amber-600 hover:text-amber-400 transition-colors text-sm"
+          >
+            ← Voltar
+          </button>
+          <h1
+            className="text-xl font-bold text-amber-100"
+            style={{ fontFamily: "Georgia, serif" }}
+          >
+            Configurar Partida
+          </h1>
+        </div>
+
+        <div className="flex flex-col gap-5">
+          {/* Game mode */}
+          <section className="bg-amber-950/40 border border-amber-800/30 rounded-xl p-4">
+            <h2 className="text-amber-400 text-xs uppercase tracking-widest mb-3">Modo de Jogo</h2>
+            <div className="flex gap-2">
+              {(Object.values(GAME_MODES) as (typeof GAME_MODES)[keyof typeof GAME_MODES][]).map(
+                (m) => (
                   <button
-                    key={n}
-                    onClick={() => setPlayerCount(n)}
-                    className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all border ${
-                      playerCount === n
-                        ? "bg-amber-600 border-amber-500 text-white"
-                        : "bg-amber-950/40 border-amber-700/30 text-amber-300 hover:bg-amber-800/30"
+                    key={m.mode}
+                    onClick={() => setMode(m.mode)}
+                    className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all border ${
+                      mode === m.mode
+                        ? "bg-amber-700/60 border-amber-500/60 text-amber-100"
+                        : "bg-transparent border-amber-800/30 text-amber-500 hover:bg-amber-900/30"
                     }`}
                   >
-                    {n}
+                    {m.label}
+                    <span className="block text-xs font-normal opacity-70 mt-0.5">
+                      {m.legadoMaximo} Legado
+                    </span>
                   </button>
-                ))}
-              </div>
-              <p className="text-amber-600/70 text-xs">
-                {playerCount === 2
-                  ? "Você vs 1 bot"
-                  : `Você vs ${playerCount - 1} bots`}
-              </p>
+                )
+              )}
             </div>
+          </section>
 
-            {/* Game mode */}
-            <div className="flex flex-col gap-2 text-left">
-              <label className="text-amber-400 text-xs uppercase tracking-widest">Modo</label>
-              <div className="flex gap-2">
-                {(Object.values(GAME_MODES) as (typeof GAME_MODES)[keyof typeof GAME_MODES][]).map(
-                  (m) => (
-                    <button
-                      key={m.mode}
-                      onClick={() => setMode(m.mode)}
-                      className={`flex-1 py-2 rounded-lg text-sm font-semibold transition-all border ${
-                        mode === m.mode
-                          ? "bg-amber-600 border-amber-500 text-white"
-                          : "bg-amber-950/40 border-amber-700/30 text-amber-300 hover:bg-amber-800/30"
-                      }`}
-                    >
-                      {m.label}
-                    </button>
-                  )
-                )}
-              </div>
-              <p className="text-amber-600/70 text-xs">
-                {mode === "rapido"
-                  ? "Vitória com 100 pontos de Legado"
-                  : "Vitória com 150 pontos de Legado"}
-              </p>
+          {/* Player count */}
+          <section className="bg-amber-950/40 border border-amber-800/30 rounded-xl p-4">
+            <h2 className="text-amber-400 text-xs uppercase tracking-widest mb-3">
+              Número de Jogadores
+            </h2>
+            <div className="flex gap-2">
+              {[2, 3, 4, 5, 6].map((n) => (
+                <button
+                  key={n}
+                  onClick={() => setPlayerCount(n)}
+                  className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition-all border ${
+                    playerCount === n
+                      ? "bg-amber-700/60 border-amber-500/60 text-amber-100"
+                      : "bg-transparent border-amber-800/30 text-amber-500 hover:bg-amber-900/30"
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
             </div>
+          </section>
 
-            <div className="flex gap-2 mt-1">
-              <button
-                onClick={() => setStep("idle")}
-                className="flex-1 py-2 text-amber-600 text-sm hover:text-amber-400 transition-colors"
-              >
-                Voltar
-              </button>
-              <button
-                onClick={() => setStep("packs")}
-                className="flex-1 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg transition-all"
-              >
-                Continuar →
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ── PACK SELECTION ────────────────────────────────────────────────── */}
-        {step === "packs" && (
-          <div className="w-full bg-amber-950/60 border border-amber-700/40 rounded-xl p-6 flex flex-col gap-4 backdrop-blur-sm">
-            <div className="text-left">
-              <h2 className="text-amber-200 font-semibold text-lg">Escolha seu Pacote Inicial</h2>
-              <p className="text-amber-500/80 text-xs mt-1">
-                Sua facção:{" "}
-                <span className="font-semibold" style={{ color: humanFaction.color }}>
-                  {humanFaction.name}
-                </span>{" "}
-                · {humanFaction.description}
-              </p>
-            </div>
-
-            <div className="flex flex-col gap-2 max-h-72 overflow-y-auto pr-1">
-              {STARTING_PACKS.map((pack) => {
-                const isSelected = humanPackId === pack.id;
+          {/* Players */}
+          <section className="bg-amber-950/40 border border-amber-800/30 rounded-xl p-4">
+            <h2 className="text-amber-400 text-xs uppercase tracking-widest mb-3">Jogadores</h2>
+            <div className="flex flex-col gap-3">
+              {players.slice(0, playerCount).map((p, i) => {
+                const faction = FACTIONS[p.factionIdx % FACTIONS.length];
                 return (
-                  <button
-                    key={pack.id}
-                    onClick={() => setHumanPackId(pack.id)}
-                    className={`text-left p-3 rounded-lg border transition-all ${
-                      isSelected
-                        ? "bg-amber-700/40 border-amber-500 ring-1 ring-amber-500/50"
-                        : "bg-amber-950/40 border-amber-800/30 hover:bg-amber-900/30"
-                    }`}
+                  <div
+                    key={i}
+                    className="rounded-lg border border-amber-800/20 p-3 bg-amber-900/10"
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-amber-200 text-sm font-semibold">
-                        {pack.label}
+                    {/* Row 1: color dot + name input + faction */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <div
+                        className="w-3 h-3 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: PLAYER_COLORS[i] }}
+                      />
+                      <input
+                        type="text"
+                        value={p.name}
+                        placeholder={i === 0 ? "Seu nome" : faction.name}
+                        onChange={(e) => updatePlayer(i, { name: e.target.value })}
+                        className="flex-1 bg-transparent text-amber-100 text-sm placeholder-amber-700 outline-none border-b border-amber-800/40 focus:border-amber-600/60 pb-0.5 transition-colors"
+                        readOnly={p.isBot}
+                      />
+                      <span
+                        className="text-xs px-2 py-0.5 rounded"
+                        style={{
+                          color: faction.color,
+                          backgroundColor: faction.color + "22",
+                        }}
+                      >
+                        {faction.name}
                       </span>
-                      {isSelected && (
-                        <span className="text-amber-400 text-xs">✓ Selecionado</span>
-                      )}
                     </div>
-                    <p className="text-amber-500/80 text-xs mt-1 leading-relaxed">
-                      {pack.description}
-                    </p>
-                  </button>
+
+                    {/* Row 2: human/bot + difficulty */}
+                    {i === 0 ? (
+                      <div className="text-amber-600/60 text-xs pl-5">Jogador humano</div>
+                    ) : (
+                      <div className="flex items-center gap-2 pl-5 flex-wrap">
+                        <div className="flex rounded-lg overflow-hidden border border-amber-800/30 text-xs">
+                          <button
+                            onClick={() => updatePlayer(i, { isBot: false, name: "" })}
+                            className={`px-2.5 py-1 transition-colors ${
+                              !p.isBot
+                                ? "bg-amber-700/50 text-amber-100"
+                                : "bg-transparent text-amber-600 hover:bg-amber-900/30"
+                            }`}
+                          >
+                            Humano
+                          </button>
+                          <button
+                            onClick={() =>
+                              updatePlayer(i, {
+                                isBot: true,
+                                name: DEFAULT_BOT_NAMES[i - 1] ?? `Bot ${i}`,
+                              })
+                            }
+                            className={`px-2.5 py-1 transition-colors ${
+                              p.isBot
+                                ? "bg-amber-700/50 text-amber-100"
+                                : "bg-transparent text-amber-600 hover:bg-amber-900/30"
+                            }`}
+                          >
+                            Bot
+                          </button>
+                        </div>
+                        {p.isBot && (
+                          <div className="flex rounded-lg overflow-hidden border border-amber-800/30 text-xs">
+                            {(["facil", "medio", "dificil"] as BotDifficulty[]).map((d) => (
+                              <button
+                                key={d}
+                                onClick={() => updatePlayer(i, { botDifficulty: d })}
+                                className={`px-2.5 py-1 transition-colors capitalize ${
+                                  p.botDifficulty === d
+                                    ? "bg-amber-800/60 text-amber-200"
+                                    : "bg-transparent text-amber-700 hover:bg-amber-900/30"
+                                }`}
+                              >
+                                {d === "facil" ? "Fácil" : d === "medio" ? "Médio" : "Difícil"}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
+          </section>
 
-            <div className="flex gap-2 mt-1">
-              <button
-                onClick={() => setStep("count")}
-                className="flex-1 py-2 text-amber-600 text-sm hover:text-amber-400 transition-colors"
-              >
-                Voltar
-              </button>
-              <button
-                onClick={handleStartGame}
-                className="flex-1 py-2 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg transition-all active:scale-95"
-              >
-                Iniciar Partida
-              </button>
-            </div>
-          </div>
-        )}
+          {/* Info about packs */}
+          <p className="text-amber-700/60 text-xs text-center">
+            Pacotes iniciais serão atribuídos automaticamente.
+          </p>
 
-        <p className="text-amber-800 text-xs mt-2">
-          MVP · Sem backend · 24 territórios · Partida salva localmente
-        </p>
+          {/* Start */}
+          <button
+            onClick={handleStartGame}
+            className="w-full py-4 bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white font-bold text-lg rounded-xl transition-all shadow-xl shadow-amber-900/40 border border-amber-500/30"
+          >
+            Iniciar Partida
+          </button>
+        </div>
       </div>
     </div>
   );
