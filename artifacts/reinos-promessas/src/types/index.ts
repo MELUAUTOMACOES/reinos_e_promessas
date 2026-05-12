@@ -30,6 +30,7 @@ export type ActionType =
   | "RECRUTAR"
   | "MOVER_TROPAS"
   | "FORTALECER_FE"
+  | "INFLUENCIAR"
   | "ATACAR"
   | "JOGAR_CARTA"
   | "DESCARTAR_CARTA"

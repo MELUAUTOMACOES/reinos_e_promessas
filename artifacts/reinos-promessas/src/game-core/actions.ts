@@ -36,6 +36,19 @@ function isFaithDifficult(faith: number): boolean {
   return faith <= 39;
 }
 
+function getLegacyForConquest(territory: Territory): number {
+  switch (territory.type) {
+    case "comum":
+      return 3;
+    case "estrategico":
+      return 6;
+    case "sagrado":
+      return 10;
+    case "capital":
+      return 15;
+  }
+}
+
 // ─── Recruit Troops ───────────────────────────────────────────────────────────
 
 /**
@@ -364,6 +377,8 @@ export function attackTerritory(
 
   let description = `${player.name} atacou ${toT.name} a partir de ${fromT.name} com ${tropasUsadas} tropa(s). `;
   description += `Força: Atacante ${combatResult.forcaAtacante} vs Defensor ${combatResult.forcaDefensor}. `;
+  description += `(Atq: ${tropasUsadas} tropas + dado ${combatResult.dadoAtacante}; `;
+  description += `Def: ${toT.tropasAtuais} tropas + defesa ${toT.defesaNatural} + fe ${combatResult.bonusFe} + base 1 + dado ${combatResult.dadoDefensor}). `;
   description += `Resultado: ${combatResult.tipoVitoria}. `;
   description += `Perdas: Atacante -${combatResult.atacantePerdas}, Defensor -${combatResult.defensorPerdas}.`;
 
@@ -380,6 +395,7 @@ export function attackTerritory(
   if (combatResult.conquistou) {
     const tropasOcupantes = Math.max(1, tropasUsadas - combatResult.atacantePerdas);
     newFromTroops = Math.max(1, newFromTroops - tropasOcupantes);
+    const legacyGained = getLegacyForConquest(toT);
     
     updatedTerritories = updatedTerritories.map((t) => {
       if (t.id === fromId) {
@@ -391,6 +407,7 @@ export function attackTerritory(
           donoAtual: playerId as string,
           tropasAtuais: tropasOcupantes,
           estado: "instavel" as const,
+          bloqueado: false,
         };
         conquered = applyFaithChange(conquered, -20);
         return conquered;
@@ -398,13 +415,30 @@ export function attackTerritory(
       return t;
     });
 
-    description += ` ${toT.name} foi conquistado!`;
+    description += ` ${toT.name} foi conquistado! +${legacyGained} Legado.`;
   }
+
+  const legacyGained = combatResult.conquistou ? getLegacyForConquest(toT) : 0;
+  const updatedPlayers =
+    legacyGained > 0
+      ? state.players.map((p) =>
+          p.id === playerId
+            ? {
+                ...p,
+                resources: {
+                  ...p.resources,
+                  legado: p.resources.legado + legacyGained,
+                },
+              }
+            : p,
+        )
+      : state.players;
 
   const updatedState = recordAction(
     {
       ...state,
       territories: updatedTerritories,
+      players: updatedPlayers,
       log: [...state.log, description],
     },
     "ATACAR",
@@ -493,9 +527,11 @@ export function influenceTerritory(
     }
     return p;
   });
+  let legacyGained = 0;
 
   if (isNeutral) {
     if (influenceResult.dominou) {
+      legacyGained = getLegacyForConquest(toT);
       updatedTerritories = updatedTerritories.map((t) => {
         if (t.id === toId) {
           let dominated: Territory = {
@@ -504,13 +540,15 @@ export function influenceTerritory(
             tropasAtuais: 1,
             estado: "instavel" as const,
             marcadoresInfluencia: 0,
+            marcadoresPressao: 0,
+            bloqueado: false,
           };
           dominated = applyFaithChange(dominated, -20);
           return dominated;
         }
         return t;
       });
-      description += ` ${toT.name} foi dominado!`;
+      description += ` ${toT.name} foi dominado! +${legacyGained} Legado.`;
     } else {
       updatedTerritories = updatedTerritories.map((t) => {
         if (t.id === toId) {
@@ -527,6 +565,7 @@ export function influenceTerritory(
     }
   } else {
     if (isRebel && influenceResult.sucesso) {
+      legacyGained = getLegacyForConquest(toT);
       updatedTerritories = updatedTerritories.map((t) => {
         if (t.id === toId) {
           let dominated: Territory = {
@@ -536,13 +575,14 @@ export function influenceTerritory(
             estado: "instavel" as const,
             marcadoresInfluencia: 0,
             marcadoresPressao: 0,
+            bloqueado: false,
           };
           dominated = applyFaithChange(dominated, -20);
           return dominated;
         }
         return t;
       });
-      description += ` ${toT.name} estava rebelde e foi dominado!`;
+      description += ` ${toT.name} estava rebelde e foi dominado! +${legacyGained} Legado.`;
     } else {
       updatedTerritories = updatedTerritories.map((t) => {
         if (t.id === toId) {
@@ -567,6 +607,20 @@ export function influenceTerritory(
     }
   }
 
+  if (legacyGained > 0) {
+    updatedPlayers = updatedPlayers.map((p) =>
+      p.id === playerId
+        ? {
+            ...p,
+            resources: {
+              ...p.resources,
+              legado: p.resources.legado + legacyGained,
+            },
+          }
+        : p,
+    );
+  }
+
   const updatedState = recordAction(
     {
       ...state,
@@ -574,7 +628,7 @@ export function influenceTerritory(
       players: updatedPlayers,
       log: [...state.log, description],
     },
-    "ATACAR",
+    "INFLUENCIAR",
     description
   );
 

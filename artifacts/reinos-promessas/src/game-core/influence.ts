@@ -48,7 +48,7 @@ export function resolveInfluence(
   const sucessosNecessarios = getSucessosNecessarios(territorio.type);
   
   // Calcular sucessos acumulados
-  let sucessosAcumulados = territorio.marcadoresInfluencia;
+  let sucessosAcumulados = territorio.marcadoresInfluencia ?? 0;
   if (sucesso) {
     sucessosAcumulados += 1;
   }
@@ -61,7 +61,7 @@ export function resolveInfluence(
   const isEnemy = !isNeutral;
   const reducaoFe = isEnemy && sucesso ? 10 : 0;
   
-  let marcadoresPressao = territorio.marcadoresPressao;
+  let marcadoresPressao = territorio.marcadoresPressao ?? 0;
   if (isEnemy && sucesso) {
     marcadoresPressao += 1;
   }

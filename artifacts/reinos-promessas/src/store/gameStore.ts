@@ -215,12 +215,32 @@ export const useGameStore = create<GameStore>()(
         if (game.turno.acoesRestantes <= 0) return;
 
         const decision = decideBotAction(game, pid);
+        const finishBotTurn = (reason?: string) => {
+          const latest = get().game ?? game;
+          if (!latest || latest.vencedor) return;
+          const stateWithLog = reason
+            ? { ...latest, log: [...latest.log, reason] }
+            : latest;
+          set({ game: applyVictoryCheck(endTurn(stateWithLog)) });
+        };
+        const commitBotResult = (
+          result: { valid: boolean; reason?: string; state: GameState },
+          actionLabel: string,
+        ) => {
+          if (result.valid) {
+            set({ game: applyVictoryCheck(result.state) });
+            return;
+          }
+          finishBotTurn(
+            `${player.name} não conseguiu executar ${actionLabel}: ${result.reason ?? "ação inválida"}. Turno encerrado.`,
+          );
+        };
 
         switch (decision.type) {
           case "recruit": {
             const tid = decision.data.territoryId as TerritoryId;
             const r = recruitTroops(game, pid, tid);
-            if (r.valid) set({ game: applyVictoryCheck(r.state) });
+            commitBotResult(r, "recrutamento");
             break;
           }
           case "move": {
@@ -228,7 +248,7 @@ export const useGameStore = create<GameStore>()(
             const to = decision.data.toId as TerritoryId;
             const cnt = decision.data.count as number;
             const r = moveTroops(game, pid, from, to, cnt);
-            if (r.valid) set({ game: applyVictoryCheck(r.state) });
+            commitBotResult(r, "movimento");
             break;
           }
           case "attack": {
@@ -236,13 +256,13 @@ export const useGameStore = create<GameStore>()(
             const to = decision.data.toId as TerritoryId;
             const tropas = decision.data.tropas as number;
             const r = attackTerritory(game, pid, from, to, tropas);
-            if (r.valid) set({ game: applyVictoryCheck(r.state) });
+            commitBotResult(r, "ataque");
             break;
           }
           case "faith": {
             const tid = decision.data.territoryId as TerritoryId;
             const r = strengthenFaith(game, pid, tid, "safe");
-            if (r.valid) set({ game: applyVictoryCheck(r.state) });
+            commitBotResult(r, "fortalecimento de fé");
             break;
           }
           case "influence": {
@@ -251,29 +271,29 @@ export const useGameStore = create<GameStore>()(
             const inf = decision.data.influencia as number;
             const ouro = decision.data.ouro as number;
             const r = influenceTerritory(game, pid, from, to, inf, ouro);
-            if (r.valid) set({ game: applyVictoryCheck(r.state) });
+            commitBotResult(r, "influência");
             break;
           }
           case "buyRandom": {
             const r = buyRandomCardAction(game, pid);
-            if (r.valid) set({ game: applyVictoryCheck(r.state) });
+            commitBotResult(r, "compra de carta");
             break;
           }
           case "buyMarket": {
             const cid = decision.data.cardId as CardId;
             const r = buyMarketCardAction(game, pid, cid);
-            if (r.valid) set({ game: applyVictoryCheck(r.state) });
+            commitBotResult(r, "compra no mercado");
             break;
           }
           case "activateChar": {
             const cid = decision.data.cardId as CardId;
             const r = activateCharacter(game, pid, cid);
-            if (r.valid) set({ game: applyVictoryCheck(r.state) });
+            commitBotResult(r, "ativação de personagem");
             break;
           }
           case "pass":
           default:
-            set({ game: applyVictoryCheck(advancePhase(game)) });
+            finishBotTurn(`${player.name} encerrou o turno.`);
             break;
         }
       },

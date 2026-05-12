@@ -55,6 +55,8 @@ function isNearObjective(s: GameState, pid: PlayerId): boolean {
 
 function genRecruit(s: GameState, pid: PlayerId): ScoredAction[] {
   const acts: ScoredAction[] = [];
+  const p = s.players.find(x => x.id === pid);
+  if (!p || p.resources.provisao < 1) return acts;
   for (const t of s.territories.filter(x => x.donoAtual === pid)) {
     const lim = TROOP_LIMITS[t.type];
     if (t.tropasAtuais >= lim) continue;
@@ -192,6 +194,7 @@ function genUseCard(s: GameState, pid: PlayerId): ScoredAction[] {
   const acts: ScoredAction[] = [];
   const p = s.players.find(x => x.id === pid);
   if (!p) return acts;
+  if (p.personagemAtivo !== null) return acts;
   for (const card of p.cartasNaMao) {
     if (card.type === "personagem" && !isCharacterActive(s, card.id)) {
       acts.push({ type: "activateChar", score: 30, data: { cardId: card.id } });

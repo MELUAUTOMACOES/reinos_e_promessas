@@ -84,6 +84,8 @@ export function createNewGame(config: NewGameConfig): GameState {
       donoAtual: null as string | null,
       estado: "neutro" as const,
       melhorias: [],
+      marcadoresInfluencia: 0,
+      marcadoresPressao: 0,
     })
   );
   const territoryMap = new Map(territories.map((t) => [t.id, t]));
